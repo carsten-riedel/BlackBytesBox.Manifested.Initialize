@@ -12,9 +12,9 @@ $result = Convert-DateTimeToVersion64SecondsString -VersionBuild 0 -VersionMajor
 ##############################
 
 # Define the path to your module folder (adjust "MyModule" as needed)
-$moduleFolder = "$PSScriptRoot\..\source\BlackBytesBox.Manifested"
+$moduleFolder = "$PSScriptRoot\..\source\BlackBytesBox.Manifested.Initialize"
 Update-ManifestModuleVersion -ManifestPath "$moduleFolder" -NewVersion "$($result.VersionMajor).$($result.VersionMinor).$($result.VersionRevision)"
-$moduleManifest = "$moduleFolder/BlackBytesBox.Manifested.psd1" -replace '[/\\]', [System.IO.Path]::DirectorySeparatorChar
+$moduleManifest = "$moduleFolder/BlackBytesBox.Manifested.Initialize.psd1" -replace '[/\\]', [System.IO.Path]::DirectorySeparatorChar
 
 # Validate the module manifest
 Write-Host "===> Testing module manifest at: $moduleManifest" -ForegroundColor Cyan
@@ -25,7 +25,7 @@ Write-Host "===> Importing module from: $moduleFolder" -ForegroundColor Cyan
 Import-Module $moduleFolder -Force
 
 # Replace 'MyFunction' with one of your module's exported command names to verify it loads
-if (Get-Command -Module BlackBytesBox.Manifested -Name "cppm" -ErrorAction SilentlyContinue) {
+if (Get-Command -Module BlackBytesBox.Manifested.Initialize -Name "cppm" -ErrorAction SilentlyContinue) {
     Write-Host "===> Module imported successfully and 'MyFunction' is available." -ForegroundColor Green
 }
 else {

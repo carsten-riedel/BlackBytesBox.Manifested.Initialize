@@ -1,4 +1,4 @@
-# BlackBytesBox.Manifested
+# BlackBytesBox.Manifested.Initialize
 A library for supporting CICD actions
 
 # PowerShell Module Utilities
@@ -28,7 +28,7 @@ powershell -NoProfile -ExecutionPolicy Unrestricted -Command "& {
     Install-PackageProvider -Name NuGet -Force -MinimumVersion 2.8.5.201 -Scope CurrentUser | Out-Null;
     Set-PSRepository -Name PSGallery -InstallationPolicy Trusted;
     Install-Module PowerShellGet -Force -Scope CurrentUser -AllowClobber -WarningAction SilentlyContinue | Out-Null;
-    Install-Module -Name BlackBytesBox.Manifested -Scope CurrentUser -AllowClobber -Force -Repository PSGallery;
+    Install-Module -Name BlackBytesBox.Manifested.Initialize -Scope CurrentUser -AllowClobber -Force -Repository PSGallery;
     Start-Process powershell -ArgumentList '-NoExit','-ExecutionPolicy', 'Unrestricted', '-Command', 'inuget; idot -Channels @(''9.0'') ; dotnet tool install --global BlackBytesBox.Distributed; satcom vscode'
 }" ; exit
 ```
@@ -59,7 +59,7 @@ Remove-OldModuleVersions -ModuleName "STROM.NANO.PSWH.CICD"
 ### General BlackBytesBox naming conventions
 ---
 
-BlackBytesBox.Manifested (PowerShell module)
+BlackBytesBox.Manifested.Initialize (PowerShell module)
 BlackBytesBox.Constructed (MSBuild lib)
 BlackBytesBox.Unified (NET Standard library)
 BlackBytesBox.Distributed (Dotnet tool)
@@ -71,5 +71,5 @@ BlackBytesBox.Retired (old .NET Framework 4.0 library)
 BlackBytesBox.Seeded (template project)
 BlackBytesBox.[Adjective].[Qualifier] (for further clarity when needed)
 
-BlackBytesBox.Manifested.Base  (Powershell module)
+BlackBytesBox.Manifested.Initialize.Base  (Powershell module)
 BlackBytesBox.Distributed.Core  (Dotnet tool)
