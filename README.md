@@ -54,22 +54,9 @@ Update-ManifestModuleVersion -ManifestPath "C:\projects\MyDscModule" -NewVersion
 Update-ModuleIfNewer -ModuleName "STROM.NANO.PSWH.CICD"
 
 Remove-OldModuleVersions -ModuleName "STROM.NANO.PSWH.CICD"
+
+Initialize-NugetRepository -Name "nuget.org" -Location "https://api.nuget.org/v3/index.json"
+Initialize-NugetRepository -Name "int.nugettest.org" -Location "https://apiint.nugettest.org/v3/index.json"
+Initialize-NugetRepository -Name "LocalGallery" -Location "$HOME\source\localGallery"
+Initialize-NugetRepository -Name "LocalNuget" -Location "$HOME\source\localNuget"
 ```
-
-### General BlackBytesBox naming conventions
----
-
-BlackBytesBox.Manifested.Initialize (PowerShell module)
-BlackBytesBox.Constructed (MSBuild lib)
-BlackBytesBox.Unified (NET Standard library)
-BlackBytesBox.Distributed (Dotnet tool)
-BlackBytesBox.Composed (NET library)
-BlackBytesBox.Dosed (NET-Windows library)
-BlackBytesBox.Routed (ASP.NET library)
-BlackBytesBox.Bladed (ASP.NET Razor library)
-BlackBytesBox.Retired (old .NET Framework 4.0 library)
-BlackBytesBox.Seeded (template project)
-BlackBytesBox.[Adjective].[Qualifier] (for further clarity when needed)
-
-BlackBytesBox.Manifested.Initialize.Base  (Powershell module)
-BlackBytesBox.Distributed.Core  (Dotnet tool)

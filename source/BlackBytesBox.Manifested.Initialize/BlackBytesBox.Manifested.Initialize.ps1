@@ -48,89 +48,6 @@ function Register-LocalGalleryRepository {
     Write-Host "Local repository '$RepositoryName' registered at: $RepositoryPath" -ForegroundColor Green
 }
 
-function Convert-DateTimeToVersion64SecondsString {
-    <#
-    .SYNOPSIS
-        Converts a DateTime instance into NuGet and assembly version components with a granularity of 64 seconds.
-
-    .DESCRIPTION
-        This function calculates the total seconds elapsed from January 1st of the input DateTime's year and discards the lower 6 bits (each unit representing 64 seconds). The resulting value is split into:
-          - LowPart: The lower 16 bits, simulating a ushort value.
-          - HighPart: The remaining upper bits combined with a year-based offset (year multiplied by 10).
-        The output is provided as a version string along with individual version components. This conversion is designed to generate version segments suitable for both NuGet package versions and assembly version numbers. The function accepts additional version parameters and supports years up to 6553.
-
-    .PARAMETER VersionBuild
-        An integer representing the build version component.
-
-    .PARAMETER VersionMajor
-        An integer representing the major version component.
-
-    .PARAMETER InputDate
-        An optional UTC DateTime value. If not provided, the current UTC date/time is used.
-        The year of the InputDate must not exceed 6553.
-
-    .EXAMPLE
-        PS C:\> $result = Convert-DateTimeToVersion64SecondsString -VersionBuild 1 -VersionMajor 0
-        PS C:\> $result
-        Name              Value
-        ----              -----
-        VersionFull       1.0.20250.1234
-        VersionBuild      1
-        VersionMajor      0
-        VersionMinor      20250
-        VersionRevision   1234
-    #>
-
-    [CmdletBinding()]
-    [alias("cdv64")]
-    param(
-        [Parameter(Mandatory = $true)]
-        [int]$VersionBuild,
-
-        [Parameter(Mandatory = $true)]
-        [int]$VersionMajor,
-
-        [Parameter(Mandatory = $false)]
-        [datetime]$InputDate = (Get-Date).ToUniversalTime()
-    )
-
-    # The number of bits to discard, where each unit equals 64 seconds.
-    $shiftAmount = 6
-
-    $dateTime = $InputDate
-
-    if ($dateTime.Year -gt 6553) {
-        throw "Year must not be greater than 6553."
-    }
-
-    # Determine the start of the current year
-    $startOfYear = [datetime]::new($dateTime.Year, 1, 1, 0, 0, 0, $dateTime.Kind)
-    
-    # Calculate total seconds elapsed since the start of the year
-    $elapsedSeconds = [int](([timespan]($dateTime - $startOfYear)).TotalSeconds)
-    
-    # Discard the lower bits by applying a bitwise shift
-    $shiftedSeconds = $elapsedSeconds -shr $shiftAmount
-    
-    # LowPart: extract the lower 16 bits (simulate ushort using bitwise AND with 0xFFFF)
-    $lowPart = $shiftedSeconds -band 0xFFFF
-    
-    # HighPart: remaining bits after a right-shift of 16 bits
-    $highPart = $shiftedSeconds -shr 16
-    
-    # Combine the high part with a year offset (year multiplied by 10)
-    $combinedHigh = $highPart + ($dateTime.Year * 10)
-    
-    # Return a hashtable with the version string and components (output names must remain unchanged)
-    return @{
-        VersionFull    = "$($VersionBuild.ToString()).$($VersionMajor.ToString()).$($combinedHigh.ToString()).$($lowPart.ToString())"
-        VersionBuild   = $VersionBuild.ToString();
-        VersionMajor   = $VersionMajor.ToString();
-        VersionMinor   = $combinedHigh.ToString();
-        VersionRevision = $lowPart.ToString()
-    }
-}
-
 function Update-ManifestModuleVersion {
     <#
     .SYNOPSIS
@@ -414,71 +331,80 @@ function Initialize-DotNet {
 }
 
 
-function Initialize-NugetRepositorys {
+function Initialize-NugetRepositoryDotNet {
     <#
     .SYNOPSIS
-        Initializes the default NuGet package sources using the dotnet CLI.
+        Initializes a NuGet package source using the dotnet CLI.
 
     .DESCRIPTION
-        This function uses the dotnet CLI to manage NuGet sources. It retrieves the currently registered
-        sources via 'dotnet nuget list source' and for each default source defined below, it checks:
-          - If the source URL is not found, it adds the source.
-          - If the source is found but is marked as [Disabled], it removes it and re-adds it.
-        The function currently registers the following default sources:
-          • nuget.org        : https://api.nuget.org/v3/index.json
-          • int.nugettest.org: https://apiint.nugettest.org/v3/index.json
+        This function manages a single NuGet source using the dotnet CLI. It retrieves the currently registered
+        sources via 'dotnet nuget list source' and checks if the provided source (by Name and Location) exists.
+        If the source is not found, it registers it. If the source is found but is marked as [Disabled],
+        it removes and then re-adds the source as enabled.
+        Additionally, if the Location is a local path (not a URL), it ensures the directory exists by creating it if necessary.
 
     .EXAMPLE
-        Initialize-NugetRepositorys
-        Invokes the dotnet CLI to ensure that the default NuGet sources are registered and enabled.
+        Initialize-NugetRepositoryDotNet -Name "nuget.org" -Location "https://api.nuget.org/v3/index.json"
+        This will verify that the NuGet source for nuget.org is registered and enabled.
     #>
     [CmdletBinding()]
     [alias("inugetx")]
-    param()
-    # Define the default NuGet sources using v3 endpoints.
-    $defaultSources = @(
-        [PSCustomObject]@{ Name = "nuget.org";          Location = "https://api.nuget.org/v3/index.json" },
-        [PSCustomObject]@{ Name = "int.nugettest.org";  Location = "https://apiint.nugettest.org/v3/index.json" }
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Location
     )
+
+    # Check if the Location is a URL; if not, treat it as a local directory.
+    if ($Location -notmatch '^https?://') {
+        $Location = $Location -replace '[/\\]', [System.IO.Path]::DirectorySeparatorChar
+        Write-Host "Provided Location '$Location' is a local path." -ForegroundColor Cyan
+        if (-not (Test-Path $Location)) {
+            Write-Host "Local path '$Location' does not exist. Creating directory." -ForegroundColor Cyan
+            New-Item -ItemType Directory -Path $Location | Out-Null
+        }
+    }
 
     Write-Host "Retrieving registered NuGet sources using dotnet CLI..." -ForegroundColor Cyan
     $listOutput = dotnet nuget list source 2>&1
     $lines = $listOutput -split "`n"
 
-    foreach ($source in $defaultSources) {
-        $foundIndex = $null
-        for ($i = 0; $i -lt $lines.Count; $i++) {
-            if ($lines[$i] -match [regex]::Escape($source.Location)) {
-                $foundIndex = $i
-                break
-            }
+    $foundIndex = $null
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match [regex]::Escape($Location)) {
+            $foundIndex = $i
+            break
         }
-        if ($foundIndex -ne $null) {
-            # Assume the preceding line contains the name and status, e.g., " 1.  nuget.org [Enabled]"
-            $statusLine = if ($foundIndex -gt 0) { $lines[$foundIndex - 1] } else { "" }
-            if ($statusLine -match '^\s*\d+\.\s*(?<Name>\S+)\s*\[(?<Status>\w+)\]') {
-                $registeredName = $Matches["Name"]
-                $status = $Matches["Status"]
-                if ($status -eq "Disabled") {
-                    Write-Host "Source '$registeredName' ($($source.Location)) is disabled. Removing and re-adding it as enabled." -ForegroundColor Yellow
-                    dotnet nuget remove source $registeredName
-                    Write-Host "Adding source '$($source.Name)' with URL '$($source.Location)'." -ForegroundColor Green
-                    dotnet nuget add source $source.Location --name $source.Name
-                }
-                else {
-                    Write-Host "Source '$registeredName' with URL '$($source.Location)' is already registered and enabled. Skipping." -ForegroundColor Yellow
-                }
+    }
+
+    if ($foundIndex -ne $null) {
+        # Assume the preceding line contains the name and status, e.g., " 1.  nuget.org [Enabled]"
+        $statusLine = if ($foundIndex -gt 0) { $lines[$foundIndex - 1] } else { "" }
+        if ($statusLine -match '^\s*\d+\.\s*(?<Name>\S+)\s*\[(?<Status>\w+)\]') {
+            $registeredName = $Matches["Name"]
+            $status = $Matches["Status"]
+            if ($status -eq "Disabled") {
+                Write-Host "Source '$registeredName' ($Location) is disabled. Removing and re-adding it as enabled." -ForegroundColor Yellow
+                dotnet nuget remove source $registeredName
+                Write-Host "Adding source '$Name' with URL '$Location'." -ForegroundColor Green
+                dotnet nuget add source $Location --name $Name
             }
             else {
-                Write-Host "Could not parse status for source with URL '$($source.Location)'. Skipping." -ForegroundColor Red
+                Write-Host "Source '$registeredName' with URL '$Location' is already registered and enabled. Skipping." -ForegroundColor Yellow
             }
         }
         else {
-            Write-Host "Source '$($source.Name)' not found. Registering it." -ForegroundColor Green
-            dotnet nuget add source $source.Location --name $source.Name
+            Write-Host "Could not parse status for source with URL '$Location'. Skipping." -ForegroundColor Red
         }
     }
+    else {
+        Write-Host "Source '$Name' not found. Registering it." -ForegroundColor Green
+        dotnet nuget add source $Location --name $Name
+    }
 }
+
 
 function Initialize-NugetRepositories {
     <#
@@ -527,7 +453,3 @@ function Initialize-NugetRepositories {
         }
     }
 }
-
-
-
-

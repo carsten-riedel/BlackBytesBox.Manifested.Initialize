@@ -69,8 +69,8 @@ Description = 'A library for supporting CICD actions.'
 # NestedModules = @()
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = @('Register-LocalGalleryRepository', 'Convert-DateTimeToVersion64SecondsString', 'Update-ManifestModuleVersion', 
-'Update-ModuleIfNewer','Remove-OldModuleVersions','Install-UserModule','Initialize-DotNet' , 'Initialize-NugetRepositorys' , 'Initialize-NugetRepositories')
+FunctionsToExport = @('Register-LocalGalleryRepository', 'Update-ManifestModuleVersion', 
+'Update-ModuleIfNewer','Remove-OldModuleVersions','Install-UserModule','Initialize-DotNet' , 'Initialize-NugetRepositoryDotNet' , 'Initialize-NugetRepositories')
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
@@ -79,7 +79,7 @@ CmdletsToExport = @()
 # VariablesToExport = @()
 
 # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
-AliasesToExport = @('rlgr','cdv64','ummv','umn','romv','ium', 'idot','inugetx','inuget')
+AliasesToExport = @('rlgr','ummv','umn','romv','ium', 'idot','inugetx','inuget')
 
 # DSC resources to export from this module
 # DscResourcesToExport = @()
