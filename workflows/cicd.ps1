@@ -31,9 +31,9 @@ $result3 = Get-GitTopLevelDirectory
 ##############################
 
 # Define the path to your module folder (adjust "MyModule" as needed)
-$moduleFolder = "$result3/source/BlackBytesBox.Manifested.Git"
+$moduleFolder = "$result3/source/BlackBytesBox.Manifested.Initialize"
 Update-ManifestModuleVersion -ManifestPath "$moduleFolder" -NewVersion "$($result1.VersionBuild).$($result1.VersionMajor).$($result1.VersionMinor)"
-$moduleManifest = "$moduleFolder/BlackBytesBox.Manifested.Git.psd1" -replace '[/\\]', [System.IO.Path]::DirectorySeparatorChar
+$moduleManifest = "$moduleFolder/BlackBytesBox.Manifested.Initialize.psd1" -replace '[/\\]', [System.IO.Path]::DirectorySeparatorChar
 
 # Validate the module manifest
 Write-Host "===> Testing module manifest at: $moduleManifest" -ForegroundColor Cyan
