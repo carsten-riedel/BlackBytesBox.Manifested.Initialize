@@ -1,41 +1,43 @@
+param (
+    [string]$NUGET_GITHUB_PUSH,
+    [string]$NUGET_PAT,
+    [string]$NUGET_TEST_PAT,
+    [string]$POWERSHELL_GALLERY
+)
 
-#Set-DotNetNugetSource -SourceName "SourcePackages"
+# If any of the parameters are empty, try loading them from a secrets file.
+if ([string]::IsNullOrEmpty($NUGET_GITHUB_PUSH) -or [string]::IsNullOrEmpty($NUGET_PAT) -or [string]::IsNullOrEmpty($NUGET_TEST_PAT) -or [string]::IsNullOrEmpty($POWERSHELL_GALLERY)) {
+    if (Test-Path "$PSScriptRoot\cicd_secrets.ps1") {
+        . "$PSScriptRoot\cicd_secrets.ps1"
+        Write-Host "Secrets loaded from file."
+    }
+    if ([string]::IsNullOrEmpty($NUGET_GITHUB_PUSH))
+    {
+        exit 1
+    }
+}
 
-. "$PSScriptRoot/cicd_secrets.ps1"
+Install-Module -Name BlackBytesBox.Manifested.Initialize -Repository "PSGallery" -Force -AllowClobber
+Install-Module -Name BlackBytesBox.Manifested.Version -Repository "PSGallery" -Force -AllowClobber
+Install-Module -Name BlackBytesBox.Manifested.Git -Repository "PSGallery" -Force -AllowClobber
 
-#Remove-OldModuleVersions -ModuleName STROM.NANO.PSWH.CICD
-#Update-ModuleIfNewer -ModuleName STROM.NANO.PSWH.CICD
 
+$result1 = Convert-DateTimeTo64SecPowershellVersion -VersionBuild 0
+$result2 = Get-GitCurrentBranch
+$result4 = Get-GitCurrentBranchRoot
+$result3 = Get-GitTopLevelDirectory
 
-$result = Convert-DateTimeToVersion64SecondsString -VersionBuild 0 -VersionMajor 0
 
 ##############################
 
 # Define the path to your module folder (adjust "MyModule" as needed)
-$moduleFolder = "$PSScriptRoot\..\source\BlackBytesBox.Manifested.Initialize"
-Update-ManifestModuleVersion -ManifestPath "$moduleFolder" -NewVersion "$($result.VersionMajor).$($result.VersionMinor).$($result.VersionRevision)"
-$moduleManifest = "$moduleFolder/BlackBytesBox.Manifested.Initialize.psd1" -replace '[/\\]', [System.IO.Path]::DirectorySeparatorChar
+$moduleFolder = "$result3/source/BlackBytesBox.Manifested.Git"
+Update-ManifestModuleVersion -ManifestPath "$moduleFolder" -NewVersion "$($result1.VersionBuild).$($result1.VersionMajor).$($result1.VersionMinor)"
+$moduleManifest = "$moduleFolder/BlackBytesBox.Manifested.Git.psd1" -replace '[/\\]', [System.IO.Path]::DirectorySeparatorChar
 
 # Validate the module manifest
 Write-Host "===> Testing module manifest at: $moduleManifest" -ForegroundColor Cyan
 Test-ModuleManifest -Path $moduleManifest
-
-# Import the module for testing
-Write-Host "===> Importing module from: $moduleFolder" -ForegroundColor Cyan
-Import-Module $moduleFolder -Force
-
-# Replace 'MyFunction' with one of your module's exported command names to verify it loads
-if (Get-Command -Module BlackBytesBox.Manifested.Initialize -Name "cppm" -ErrorAction SilentlyContinue) {
-    Write-Host "===> Module imported successfully and 'MyFunction' is available." -ForegroundColor Green
-}
-else {
-    Write-Host "===> Warning: 'MyFunction' is not available. Verify your module's exports." -ForegroundColor Yellow
-}
-
-# Publish the module to LocalGallery
-Write-Host "===> Publishing module to LocalGallery..." -ForegroundColor Cyan
-Publish-Module -Path $moduleFolder -Repository LocalGallery
-Write-Host "===> Module published to LocalGallery." -ForegroundColor Green
 
 Publish-Module -Path $moduleFolder -Repository "PSGallery" -NuGetApiKey "$POWERSHELL_GALLERY"
 
