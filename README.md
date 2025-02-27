@@ -1,26 +1,27 @@
 # BlackBytesBox.Manifested.Initialize
-A library for supporting CICD actions
 
-# PowerShell Module Utilities
+A library for supporting CICD actions and PowerShell module management.
 
-A small collection of PowerShell functions designed to simplify module and repository management. This repo includes:
+## PowerShell Module Utilities
 
-- **Register-LocalGalleryRepository (`rlg`)**  
-  Ensures a local repository folder exists, removes any pre-existing repository with the same name, and registers a new local repository with a Trusted installation policy.
+A collection of PowerShell functions designed to simplify module and repository management:
 
-- **Convert-DateTimeToVersion64SecondsString (`cdv64`)**  
-  Converts a UTC DateTime into version components (build, major, minor, revision) using a 64-second granularity for versioning suitable for NuGet packages and assemblies.
+- **Register-LocalGalleryRepository (`rlgr`)**  
+  Registers a local PowerShell repository for gallery modules. Ensures the specified local repository folder exists, removes any existing repository with the given name, and registers the repository with a Trusted installation policy.
 
 - **Update-ManifestModuleVersion (`ummv`)**  
-  Recursively searches for a PSD1 manifest in a directory and updates its ModuleVersion while preserving comments and formatting.
+  Updates the ModuleVersion in a PowerShell module manifest (psd1) file. Can work with either a direct file path or recursively search a directory for the first psd1 file.
 
 - **Update-ModuleIfNewer (`umn`)**  
-  Searches the specified repository (default: PSGallery) for a module update and installs it only if a newer version is available, avoiding unnecessary forced downloads.
+  Installs or updates a module from a repository (default: PSGallery) only if a newer version is available. Prevents unnecessary downloads when the installed module is already up to date.
 
-- **Remove-OldModuleVersions**  
-  Cleans up older installed versions of a module, retaining only the latest version.
+- **Remove-OldModuleVersions (`romv`)**  
+  Removes older versions of an installed PowerShell module, keeping only the latest version. Helps clean up local installations accumulated from repeated updates.
 
-## Example Commands
+- **Install-UserModule (`ium`)**  
+  A wrapper function for Install-Module that ensures modules are installed for the current user scope.
+
+## Example Installation Command
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Unrestricted -Command "& {
@@ -33,30 +34,21 @@ powershell -NoProfile -ExecutionPolicy Unrestricted -Command "& {
 }" ; exit
 ```
 
-Register a local gallery repository:
+## Example Usage
+
 ```powershell
-
-powershell -NoProfile -ExecutionPolicy unrestricted -Command "& Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Force; Install-Module -Name STROM.NANO.PSWH.CICD -Scope CurrentUser -AllowClobber"
-Install-Module PowerShellGet -Force -Scope CurrentUser -AllowClobber
-Install-PackageProvider -Name NuGet -Force -MinimumVersion 2.8.5.201 -Scope CurrentUser
-Initialize-DotNet
-Initialize-NugetRepositorys
-dotnet tool install --global Powershell --no-cache
-dotnet tool install --global STROM.ATOM.TOOL.Common
-
+# Register a local gallery repository
 Register-LocalGalleryRepository -RepositoryPath "$HOME/source/gallery" -RepositoryName "LocalGallery"
 
-$versionInfo = Convert-DateTimeToVersion64SecondsString -VersionBuild 1 -VersionMajor 0
-Write-Host "Version: $($versionInfo.VersionFull)"
+# Update a module manifest version
+Update-ManifestModuleVersion -ManifestPath "C:\projects\MyModule\MyModule.psd1" -NewVersion "2.0.0"
 
-Update-ManifestModuleVersion -ManifestPath "C:\projects\MyDscModule" -NewVersion "2.0.0"
+# Update a module if a newer version exists
+Update-ModuleIfNewer -ModuleName "MyModule"
 
-Update-ModuleIfNewer -ModuleName "STROM.NANO.PSWH.CICD"
+# Clean up old versions of a module
+Remove-OldModuleVersions -ModuleName "MyModule"
 
-Remove-OldModuleVersions -ModuleName "STROM.NANO.PSWH.CICD"
-
-Initialize-NugetRepository -Name "nuget.org" -Location "https://api.nuget.org/v3/index.json"
-Initialize-NugetRepository -Name "int.nugettest.org" -Location "https://apiint.nugettest.org/v3/index.json"
-Initialize-NugetRepository -Name "LocalGallery" -Location "$HOME\source\localGallery"
-Initialize-NugetRepository -Name "LocalNuget" -Location "$HOME\source\localNuget"
+# Install a module for the current user
+Install-UserModule -Name "MyModule" -Force
 ```
