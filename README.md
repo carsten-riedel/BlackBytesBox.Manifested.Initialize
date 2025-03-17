@@ -30,7 +30,7 @@ powershell -NoProfile -ExecutionPolicy Unrestricted -Command "& {
     Set-PSRepository -Name PSGallery -InstallationPolicy Trusted;
     Install-Module PowerShellGet -Force -Scope CurrentUser -AllowClobber -WarningAction SilentlyContinue | Out-Null;
     Install-Module -Name BlackBytesBox.Manifested.Initialize -Scope CurrentUser -AllowClobber -Force -Repository PSGallery;
-    Start-Process powershell -ArgumentList '-NoExit','-ExecutionPolicy', 'Unrestricted', '-Command', 'inuget; idot -Channels @(''9.0'') ; dotnet tool install --global BlackBytesBox.Distributed; satcom vscode'
+    Start-Process powershell -ArgumentList '-NoExit','-ExecutionPolicy', 'Unrestricted', '-Command', 'inuget; idot -Channels @(''9.0'') ; dotnet tool install --global BlackBytesBox.Distributed; bbdist vscode'
 }" ; exit
 ```
 
