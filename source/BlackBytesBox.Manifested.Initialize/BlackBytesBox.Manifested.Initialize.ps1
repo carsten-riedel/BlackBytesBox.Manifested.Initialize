@@ -233,17 +233,34 @@ function Remove-OldModuleVersions {
 function Install-UserModule {
     <#
     .SYNOPSIS
-      Installs modules for the current user.
+        Installs one or more modules for the *current* user.
+    
+    .DESCRIPTION
+        Thin wrapper around Install‑Module that forces `-Scope CurrentUser`
+        but otherwise behaves just like the original cmdlet.
+    
+    .PARAMETER Name
+        The module name(s) to install.
+    
+    .PARAMETER Force
+        Suppresses all prompts, mirroring Install‑Module’s -Force switch.
+    
+    .EXAMPLE
+        Install-UserModule -Name Pester -Force
     #>
-    [CmdletBinding()]   # exposes -Verbose, -Force, etc.
+    [CmdletBinding()]
     param(
-        [Parameter(Mandatory, Position=0)]
-        [string[]]$Name
+        [Parameter(Mandatory, Position = 0)]
+        [string[]] $Name,
+    
+        [switch] $Force
     )
     
-    # Add/override the scope and forward everything else
-    Install-Module @PSBoundParameters -Scope CurrentUser
-    }
+    # Inject / override the scope and forward everything else
+    $PSBoundParameters['Scope'] = 'CurrentUser'
+    Install-Module @PSBoundParameters
+}
+    
     
 function Initialize-DotNet {
     <#
