@@ -233,27 +233,18 @@ function Remove-OldModuleVersions {
 function Install-UserModule {
     <#
     .SYNOPSIS
-      Installs a module for the current user.
-      
-    .DESCRIPTION
-      This wrapper function calls Install-Module with the -Scope CurrentUser parameter,
-      ensuring that modules are installed for the current user.
-      
-    .PARAMETER Args
-      Additional parameters for Install-Module.
-      
-    .EXAMPLE
-      Install-UserModule -Name Pester -Force
-      Installs the Pester module for the current user.
+      Installs modules for the current user.
     #>
-    [alias("ium")]
+    [CmdletBinding()]   # exposes -Verbose, -Force, etc.
     param(
-        [Parameter(ValueFromRemainingArguments = $true)]
-        $Args
+        [Parameter(Mandatory, Position=0)]
+        [string[]]$Name
     )
-    Install-Module -Scope CurrentUser @Args
-}
-
+    
+    # Add/override the scope and forward everything else
+    Install-Module @PSBoundParameters -Scope CurrentUser
+    }
+    
 function Initialize-DotNet {
     <#
     .SYNOPSIS
