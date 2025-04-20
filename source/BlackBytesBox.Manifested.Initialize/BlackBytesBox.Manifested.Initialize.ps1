@@ -259,8 +259,7 @@ function Install-UserModule {
     # Inject / override the scope and forward everything else
     $PSBoundParameters['Scope'] = 'CurrentUser'
     Install-Module @PSBoundParameters
-}
-    
+}   
     
 function Initialize-DotNet {
     <#
@@ -338,7 +337,6 @@ function Initialize-DotNet {
     }
 }
 
-
 function Initialize-NugetRepositoryDotNet {
     <#
     .SYNOPSIS
@@ -413,7 +411,6 @@ function Initialize-NugetRepositoryDotNet {
     }
 }
 
-
 function Initialize-NugetRepositories {
     <#
     .SYNOPSIS
@@ -459,5 +456,33 @@ function Initialize-NugetRepositories {
             Write-Host "Registering repository '$($source.Name)' with URL '$($source.Location)'." -ForegroundColor Green
             Register-PackageSource -Name $source.Name -Location $source.Location -ProviderName NuGet -Trusted | Out-Null
         }
+    }
+}
+
+function Test-IsWindows {
+    <#
+    .SYNOPSIS
+        Returns $True if PowerShell is running on Windows (any edition or version).
+
+    .DESCRIPTION
+        Combines .NET RuntimeInformation (if present) with a PlatformID fallback
+        to detect Windows accurately across PowerShell Desktop and Core.
+
+    .OUTPUTS
+        Boolean: $True on Windows, $False otherwise.
+    #>
+
+    # Determine if the RuntimeInformation type exists
+    if ([Type]::GetType('System.Runtime.InteropServices.RuntimeInformation', $false)) {
+        # Use cross-platform API
+        return [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+            [System.Runtime.InteropServices.OSPlatform]::Windows
+        )
+    }
+    else {
+        # Fallback for older Windows PowerShell: check PlatformID
+        return (
+            [Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
+        )
     }
 }

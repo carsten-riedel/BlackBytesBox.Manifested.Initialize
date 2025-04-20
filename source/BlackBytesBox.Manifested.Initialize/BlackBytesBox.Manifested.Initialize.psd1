@@ -70,7 +70,9 @@ Description = 'A library for supporting CICD actions.'
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
 FunctionsToExport = @('Register-LocalGalleryRepository', 'Update-ManifestModuleVersion', 
-'Update-ModuleIfNewer','Remove-OldModuleVersions','Install-UserModule','Initialize-DotNet' , 'Initialize-NugetRepositoryDotNet' , 'Initialize-NugetRepositories')
+'Update-ModuleIfNewer','Remove-OldModuleVersions','Install-UserModule','Initialize-DotNet' , 'Initialize-NugetRepositoryDotNet' , 'Initialize-NugetRepositories',
+'Test-IsWindows'
+)
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()
@@ -79,7 +81,7 @@ CmdletsToExport = @()
 # VariablesToExport = @()
 
 # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
-AliasesToExport = @('rlgr','ummv','umn','romv','ium', 'idot','inugetx','inuget')
+AliasesToExport = @('rlgr','ummv','umn','romv','ium', 'idot','inugetx','inuget','iswin')
 
 # DSC resources to export from this module
 # DscResourcesToExport = @()
