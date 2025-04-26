@@ -12,7 +12,7 @@
 RootModule = 'BlackBytesBox.Manifested.Initialize.psm1'
 
 # Version number of this module.
-ModuleVersion = '0.20251.11244'
+ModuleVersion = '0.20252.24401'
 
 # Supported PSEditions
 #CompatiblePSEditions = 'Desktop'
@@ -51,7 +51,7 @@ Description = 'A library for supporting CICD actions.'
 # ProcessorArchitecture = ''
 
 # Modules that must be imported into the global environment prior to importing this module
-#RequiredModules = @(@{ModuleName = 'CoreePower.Lib'; ModuleVersion = '0.20251.11244'; })
+#RequiredModules = @(@{ModuleName = 'CoreePower.Lib'; ModuleVersion = '0.20252.24401'; })
 
 # Assemblies that must be loaded prior to importing this module
 # RequiredAssemblies = @()
@@ -71,7 +71,7 @@ Description = 'A library for supporting CICD actions.'
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
 FunctionsToExport = @('Register-LocalGalleryRepository', 'Update-ManifestModuleVersion', 
 'Update-ModuleIfNewer','Remove-OldModuleVersions','Install-UserModule','Initialize-DotNet' , 'Initialize-NugetRepositoryDotNet' , 'Initialize-NugetRepositories',
-'Test-IsWindows'
+'Test-IsWindows','Write-LogInline' , 'Enable-TemporaryUserScriptExecution','Restore-OriginalUserScriptExecution','Invoke-IsolatedScript'
 )
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
@@ -81,7 +81,7 @@ CmdletsToExport = @()
 # VariablesToExport = @()
 
 # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
-AliasesToExport = @('rlgr','ummv','umn','romv','ium', 'idot','inugetx','inuget','iswin')
+AliasesToExport = @('rlgr','ummv','umn','romv','ium', 'idot','inugetx','inuget','iswin','wlog','etse','rotse','iis')
 
 # DSC resources to export from this module
 # DscResourcesToExport = @()

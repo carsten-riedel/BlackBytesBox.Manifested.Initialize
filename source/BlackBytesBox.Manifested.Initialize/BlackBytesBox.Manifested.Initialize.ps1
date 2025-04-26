@@ -195,15 +195,15 @@ function Remove-OldModuleVersions {
     [alias("romv")]
     param(
         [Parameter(Mandatory = $true)]
-        [string]$ModuleName
+        [string]$Name
     )
 
     try {
         # Retrieve all installed versions of the module.
-        $installedModules = Get-InstalledModule -Name $ModuleName -AllVersions -ErrorAction SilentlyContinue
+        $installedModules = Get-InstalledModule -Name $Name -AllVersions -ErrorAction SilentlyContinue
 
         if (-not $installedModules) {
-            Write-Host "No installed module found with the name '$ModuleName'." -ForegroundColor Yellow
+            Write-Host "No installed module found with the name '$Name'." -ForegroundColor Yellow
             return
         }
 
@@ -215,15 +215,17 @@ function Remove-OldModuleVersions {
         $oldModules = $sortedModules | Select-Object -Skip 1
 
         if (-not $oldModules) {
-            Write-Host "Only one version of '$ModuleName' is installed. Nothing to remove." -ForegroundColor Green
+            Write-Host "No older versions of '$Name' to remove." -ForegroundColor Green
             return
         }
 
         foreach ($module in $oldModules) {
-            Write-Host "Removing $ModuleName version $($module.Version)..." -ForegroundColor Cyan
-            Uninstall-Module -Name $ModuleName -RequiredVersion $module.Version -Force
+            Write-Host "Removing $Name version $($module.Version)..." -ForegroundColor Cyan
+            Uninstall-Module -Name $Name -RequiredVersion $module.Version -Force
         }
-        Write-Host "Old versions of '$ModuleName' have been removed. Latest version $($latestModule.Version) is retained." -ForegroundColor Green
+
+        Write-Host "Cleaned up '$Name'; latest ($($latestModule.Version)) kept."
+        
     }
     catch {
         Write-Error "An error occurred while removing old versions: $_"
@@ -471,7 +473,8 @@ function Test-IsWindows {
     .OUTPUTS
         Boolean: $True on Windows, $False otherwise.
     #>
-
+    [alias("iswin")]
+    param()
     # Determine if the RuntimeInformation type exists
     if ([Type]::GetType('System.Runtime.InteropServices.RuntimeInformation', $false)) {
         # Use cross-platform API
@@ -486,3 +489,426 @@ function Test-IsWindows {
         )
     }
 }
+
+<#
+.SYNOPSIS
+    Writes a timestamped, color‑coded inline log entry to the console, optionally appends to a daily log file, and optionally returns log details as JSON.
+
+.DESCRIPTION
+    Formats messages with a high-precision timestamp, log-level abbreviation, and caller identifier. Color-codes console output by severity, can overwrite the previous line, and can append to a per-process daily log file.
+    Use -ReturnJson to emit a JSON representation of the log details instead of returning nothing.
+
+.PARAMETER Level
+    The log level. Valid values: Verbose, Debug, Information, Warning, Error, Critical.
+
+.PARAMETER MinLevel
+    Minimum level to write to the console. Messages below this level are suppressed. Default: Information.
+
+.PARAMETER FileMinLevel
+    Minimum level to append to the log file. Messages below this level are skipped. Default: Verbose.
+
+.PARAMETER Template
+    The message template, using placeholders like {Name}.
+
+.PARAMETER Params
+    Values for each placeholder in Template. Either a hashtable or an ordered object array.
+
+.PARAMETER UseBackColor
+    Switch to enable background coloring in the console.
+
+.PARAMETER Overwrite
+     Switch to overwrite the previous console entry rather than writing a new line.
+
+.PARAMETER InitialWrite
+    Switch to output an initial blank line instead of attempting to overwrite on the first call when using -Overwrite.
+
+.PARAMETER FileAppName
+    When set, enables file logging under:
+      %LOCALAPPDATA%\Write-LogInline\<FileAppName>\<yyyy-MM-dd>_<PID>.log
+
+.PARAMETER ReturnJson
+    Switch to return the log details as a JSON-formatted string; otherwise, no output.
+
+.EXAMPLE
+    # Write a green "Hello, World!" message to the console
+    Write-LogInline -Level Information `
+                   -Template "{greeting}, {user}!" `
+                   -Params @{ greeting = "Hello"; user = "World" }
+
+.EXAMPLE
+    # Using defaults plus -ReturnJson
+    $WriteLogInlineDefaults = @{
+        FileMinLevel  = 'Verbose'
+        MinLevel      = 'Information'
+        UseBackColor  = $false
+        Overwrite     = $true
+        FileAppName   = 'testing'
+        ReturnJson    = $false
+    }
+
+    Write-LogInline -Level Verbose `
+                   -Template "{hello}-{world} number {num} at {time}!" `
+                   -Params "Hello","World",1,1.2 `
+                   @WriteLogInlineDefaults
+
+.NOTES
+    Requires PowerShell 5.0 or later.
+#>
+function Write-LogInline {
+    [CmdletBinding()]
+    [alias("wlog")]
+    param(
+        [ValidateSet('Verbose','Debug','Information','Warning','Error','Critical')][string]$Level,
+        [ValidateSet('Verbose','Debug','Information','Warning','Error','Critical')][string]$MinLevel       = 'Information',
+        [ValidateSet('Verbose','Debug','Information','Warning','Error','Critical')][string]$FileMinLevel  = 'Verbose',
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()] [string]$Template,
+        [object]$Params,
+        [switch]$UseBackColor,
+        [switch]$Overwrite,
+        [switch]$InitialWrite,
+        [string]$FileAppName,
+        [switch]$ReturnJson
+    )
+
+    # Normalize any non-hashtable, non-array to a one‐item array
+    if ($Params -isnot [hashtable] -and $Params -isnot [object[]]) {
+        $Params = @($Params)
+    }
+
+    # Now enforce flatness on arrays
+    if ($Params -is [object[]] -and ($Params |
+    Where-Object { $_ -is [System.Collections.IEnumerable] -and -not ($_ -is [string]) }
+    )) {
+        throw "Parameter -Params array must be flat (no nested collections)."
+    }
+
+    # ANSI escape
+    $esc = [char]27
+    if (-not $script:WLI_Caller) {
+        $script:WLI_Caller = if ($MyInvocation.PSCommandPath) { Split-Path -Leaf $MyInvocation.PSCommandPath } else { 'Console' }
+    }
+    $caller = $script:WLI_Caller
+
+    # Level maps
+    $levelValues = @{ Verbose=0; Debug=1; Information=2; Warning=3; Error=4; Critical=5 }
+    $abbrMap      = @{ Verbose='VRB'; Debug='DBG'; Information='INF'; Warning='WRN'; Error='ERR'; Critical='CRT' }
+
+    $writeConsole = $levelValues[$Level] -ge $levelValues[$MinLevel]
+    $writeToFile  = $FileAppName -and ($levelValues[$Level] -ge $levelValues[$FileMinLevel])
+    if (-not ($writeConsole -or $writeToFile)) { return }
+
+    # File path init
+    if ($writeToFile) {
+        $os = [int][System.Environment]::OSVersion.Platform
+        switch ($os) {
+            2 { $base = $env:LOCALAPPDATA } # Win32NT
+            4 { $base = Join-Path $env:HOME ".local/share" } # Unix
+            6 { $base = Join-Path $env:HOME ".local/share" } # MacOSX
+            default { throw "Unsupported OS platform: $os" }
+        }
+        $root = Join-Path $base "Write-LogInline/$FileAppName"
+
+        if (-not (Test-Path $root)) { New-Item -Path $root -ItemType Directory | Out-Null }
+        $date    = Get-Date -Format 'yyyy-MM-dd'
+        $logPath = Join-Path $root "${date}_${PID}.log"
+    }
+
+    # Timestamp and render
+    $timeEntry = Get-Date
+    $timeStr   = $timeEntry.ToString('yyyy-MM-dd HH:mm:ss:ff')
+    $plMatches = [regex]::Matches($Template, '{(?<name>\w+)}')
+    $keys      = $plMatches | ForEach-Object { $_.Groups['name'].Value } | Select-Object -Unique
+    $wasHash    = $Params -is [hashtable]
+    $paramArray = @($Params)
+
+    if (-not $wasHash -and $paramArray.Count -lt $keys.Count) {
+        throw "Insufficient parameters: expected $($keys.Count), received $($paramArray.Count)"
+    }
+
+    $keys = @($keys)
+    if ($wasHash) {
+        $map = $Params
+    } else {
+        $map = @{}
+        for ($i = 0; $i -lt $keys.Count; $i++) { $map[$keys[$i]] = $paramArray[$i] }  # CHANGED: use paramArray
+    }
+
+    # Fix: cast null to empty string, avoid boolean -or misuse
+    $msg = $Template
+    foreach ($k in $keys) {
+        $escName = [regex]::Escape($k)
+        $msg = $msg -replace "\{$escName\}", [string]$map[$k]
+    }
+    $rawLine = "[$timeStr $($abbrMap[$Level])][$caller] $msg"
+
+    # Write to file
+    if ($writeToFile) { $rawLine | Out-File -FilePath $logPath -Append -Encoding UTF8 }
+
+    # Console output
+    if ($writeConsole) {
+        if ($InitialWrite) {
+            # Initial invocation: write a blank line instead of overwriting
+            Write-Host ""
+        }
+        if ($Overwrite) {
+            for ($i = 0; $i -lt $script:WLI_LastLines; $i++) {
+                Write-Host -NoNewline ($esc + '[1A' + "`r" + $esc + '[K')
+            }
+        }
+        Write-Host -NoNewline ($esc + '[?25l')
+
+        # Color maps
+        $levelMap = @{
+            Verbose     = @{ Abbrev='VRB'; Fore='DarkGray' }
+            Debug       = @{ Abbrev='DBG'; Fore='Cyan'     }
+            Information = @{ Abbrev='INF'; Fore='Green'    }
+            Warning     = @{ Abbrev='WRN'; Fore='Yellow'   }
+            Error       = @{ Abbrev='ERR'; Fore='Red'      }
+            Critical    = @{ Abbrev='CRT'; Fore='White'; Back='DarkRed' }
+        }
+        $typeColorMap = @{
+            'System.String'   = 'Green';   'System.DateTime' = 'Yellow'
+            'System.Int32'    = 'Cyan';    'System.Int64'     = 'Cyan'
+            'System.Double'   = 'Blue';    'System.Decimal'   = 'Blue'
+            'System.Boolean'  = 'Magenta'; 'Default'          = 'White'
+            'System.Version'  = 'Magenta'; 'Microsoft.PackageManagement.Internal.Utility.Versions.FourPartVersion' = 'Magenta'
+            'Microsoft.PowerShell.ExecutionPolicy' = 'Magenta'
+            'System.Management.Automation.ActionPreference' = 'Green'
+        }
+        $staticFore = 'White'; $staticBack = 'Black'
+        function Write-Colored { param($Text,$Fore,$Back) if ($UseBackColor -and $Back) { Write-Host -NoNewline $Text -ForegroundColor $Fore -BackgroundColor $Back } else { Write-Host -NoNewline $Text -ForegroundColor $Fore } }
+
+        # Header
+        $entry = $levelMap[$Level]
+        $tag   = $entry.Abbrev
+        if ($entry.ContainsKey('Back')) {
+            $lvlBack = $entry.Back
+        } elseif ($UseBackColor) {
+            $lvlBack = $staticBack
+        } else {
+            $lvlBack = $null
+        }
+        Write-Colored '[' $staticFore $staticBack; Write-Colored $timeStr $staticFore $staticBack; Write-Colored ' ' $staticFore $staticBack
+        if ($lvlBack) { Write-Host -NoNewline $tag -ForegroundColor $entry.Fore -BackgroundColor $lvlBack } else { Write-Host -NoNewline $tag -ForegroundColor $entry.Fore }
+        Write-Colored '] [' $staticFore $staticBack; Write-Colored $caller $staticFore $staticBack; Write-Colored '] ' $staticFore $staticBack
+
+        # Message parts
+        $pos = 0
+        foreach ($m in $plMatches) {
+            if ($m.Index -gt $pos) {
+                Write-Colored $Template.Substring($pos, $m.Index - $pos) $staticFore $staticBack
+            }
+            $val = $map[$m.Groups['name'].Value]
+            $t   = $val.GetType().FullName
+
+            if ($typeColorMap.ContainsKey($t)) {
+                $f = $typeColorMap[$t]
+            } else {
+                $f = $typeColorMap['Default']
+            }
+
+            if ($UseBackColor) {
+                $b = $staticBack
+            } else {
+                $b = $null
+            }
+
+            Write-Colored $val $f $b
+            $pos = $m.Index + $m.Length
+        }
+
+        if ($pos -lt $Template.Length) {
+            if ($UseBackColor) {
+                $b = $staticBack
+            } else {
+                $b = $null
+            }
+            Write-Colored $Template.Substring($pos) $staticFore $b
+        }
+
+        Write-Host ''
+        Write-Host -NoNewline ($esc + '[?25h')
+
+        try {
+            $width = $Host.UI.RawUI.WindowSize.Width
+        } catch {
+            $width = 80
+        }
+
+        $script:WLI_LastLines = [math]::Ceiling($rawLine.Length / ($width - 1))
+    }
+
+    # Return JSON
+    $output = [PSCustomObject]@{
+        DateTime   = $timeEntry
+        PID        = $PID
+        Level      = $Level
+        Template   = $Template
+        Message    = $msg
+        Parameters = $map
+    }
+
+    # Return JSON only if requested
+    if ($ReturnJson) {
+        return $output | ConvertTo-Json -Depth 5
+    }
+}
+
+
+<#
+.SYNOPSIS
+    Temporarily enables script and module execution by setting a permissive execution policy for the CurrentUser, while capturing the original policy.
+.DESCRIPTION
+    Retrieves the CurrentUser execution policy. If it's not already permissive, sets it to RemoteSigned. Returns the original policy for later restoration.
+.EXAMPLE
+    # Capture and enable script execution temporarily
+    $originalPolicy = Enable-TemporaryUserScriptExecution
+#>
+function Enable-TemporaryUserScriptExecution {
+    [CmdletBinding()]
+    [alias("etse")]
+    param()
+    # Constant list of policies that allow scripts/modules
+    $allowedPolicies = @('RemoteSigned','Unrestricted','Bypass')
+
+    $WriteLogInlineDefaults = @{
+        FileMinLevel  = 'Error'
+        MinLevel      = 'Information'
+        UseBackColor  = $false
+        Overwrite     = $false
+        FileAppName   = $null
+        ReturnJson    = $false
+    }
+
+    # Capture the current CurrentUser policy
+    $originalPolicy = Get-ExecutionPolicy -Scope CurrentUser
+
+            # Log the invocation attempt
+    
+    try {
+        Write-LogInline -Level Information -Template "Attempting to enable temporary script execution for CurrentUser scope..." @WriteLogInlineDefaults
+
+        Write-LogInline -Level Information -Template "Current CurrentUser policy is '{0}'." -Params $originalPolicy @WriteLogInlineDefaults
+
+        if ($allowedPolicies -contains $originalPolicy) {
+            Write-LogInline -Level Information -Template "Policy is already permissive; no change needed." @WriteLogInlineDefaults
+        }
+        else {
+            $targetPolicy = $allowedPolicies[0]  # RemoteSigned
+            Write-LogInline -Level Information -Template "Temporarily setting CurrentUser execution policy to '{0}'." -Params $targetPolicy @WriteLogInlineDefaults
+            Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy $targetPolicy -Force
+            Write-LogInline -Level Information -Template "Execution policy now '{0}' for temporary script execution." -Params $targetPolicy  @WriteLogInlineDefaults
+        }
+    }
+    catch {
+        Write-LogInline -Level Error -Template "Error enabling temporary script execution: $_" @WriteLogInlineDefaults
+        throw
+    }
+
+    # Return the original for restoration
+    return $originalPolicy
+}
+
+
+<#
+.SYNOPSIS
+    Restores a previously captured CurrentUser execution policy to its original state, if needed.
+.DESCRIPTION
+    Compares the CurrentUser execution policy with the given original. If they differ, restores the policy. Otherwise logs that no change is needed.
+.EXAMPLE
+    # Restore policy after temporary change
+    Restore-OriginalUserScriptExecution -Policy $originalPolicy
+#>
+function Restore-OriginalUserScriptExecution {
+    [CmdletBinding()]
+    [alias("rotse")]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Policy
+    )
+
+    $WriteLogInlineDefaults = @{
+        FileMinLevel  = 'Error'
+        MinLevel      = 'Information'
+        UseBackColor  = $false
+        Overwrite     = $false
+        FileAppName   = $null
+        ReturnJson    = $false
+    }
+    
+    # Get the current policy to decide if restoration is needed
+    $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
+
+    try {
+        if ($currentPolicy -eq $Policy) { 
+            Write-LogInline -Level Information -Template "CurrentUser policy restore is already '{0}' (desired was '{1}'); no restore needed." ` -Params $currentPolicy, $Policy @WriteLogInlineDefaults
+
+        }
+        else {
+            Write-LogInline -Level Information -Template "Restoring CurrentUser execution policy to '{0}'." -Params $currentPolicy @WriteLogInlineDefaults
+            Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy $currentPolicy -Force
+            $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
+            Write-LogInline -Level Information -Template "Execution policy restored to '{0}'." -Params $currentPolicy @WriteLogInlineDefaults
+        }
+    }
+    catch {
+        Write-LogInline -Level Error -Template "Failed to restore execution policy: $_" @WriteLogInlineDefaults
+        throw
+    }
+}
+
+function Invoke-IsolatedScript {
+    <#
+    .SYNOPSIS
+        Executes a given PowerShell script block in an isolated shell and returns output and errors.
+
+    .DESCRIPTION
+        This function executes the provided PowerShell script block in a completely isolated and fresh PowerShell environment.
+        It captures standard output and errors internally and returns them as structured results.
+
+        Useful when script execution must avoid interference from existing loaded modules or persistent states.
+
+    .PARAMETER ScriptBlock
+        The PowerShell script block containing commands to execute.
+
+    .EXAMPLE
+        $result = Invoke-IsolatedScript -ScriptBlock { Remove-OldModuleVersions -Name 'Example.Module' }
+        if ($result.Output) { $result.Output | ForEach-Object { Write-Host $_ } }
+        if ($result.Errors) { $result.Errors | ForEach-Object { Write-Error $_ } }
+
+    .RETURNS
+        [PSCustomObject] containing Output and Errors arrays.
+    #>
+    [CmdletBinding()]
+    [alias("iis")]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ScriptBlock]$ScriptBlock
+    )
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = 'powershell.exe'
+    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -Command $($ScriptBlock.ToString())"
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+
+    $process = [System.Diagnostics.Process]::Start($psi)
+    $output = $process.StandardOutput.ReadToEnd()
+    $errorOutput = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+
+    # Process and structure output
+    $outputLines = $output -split "`n" | ForEach-Object { $_.TrimEnd() } | Where-Object { $_ -ne '' }
+    $errorLines = $errorOutput -split "`n" | ForEach-Object { $_.TrimEnd() } | Where-Object { $_ -ne '' }
+
+    return [PSCustomObject]@{
+        Output = $outputLines
+        Errors = $errorLines
+    }
+}
+
+
+
+
